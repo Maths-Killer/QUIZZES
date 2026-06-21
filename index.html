@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#4f46e5" />
+  <title>QuizBank — Devotional-style Local Quiz App</title>
+
+  <!--
+    MathJax initialization — configured before the MathJax script loads,
+    per MathJax v3 convention (window.MathJax must exist before main.js
+    parses). Tuned for mobile screen scaling: scale set relative to
+    viewport, and the SVG output renderer is used (no extra webfont
+    download required, renders crisply at any zoom level on small screens).
+  -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)'], ['$', '$']],
+        displayMath: [['\\[', '\\]'], ['$$', '$$']],
+        processEscapes: true,
+      },
+      svg: {
+        fontCache: 'global',
+        scale: 1,
+        minScale: 0.6,
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+        renderActions: {
+          addMenu: [0, '', ''], // disable right-click MathJax context menu (irrelevant on mobile, avoids accidental long-press popups)
+        },
+      },
+      chtml: {
+        scale: 1,
+        mtextInheritFont: true,
+      },
+      startup: {
+        typeset: false, // we call MathJax.typesetPromise() manually after each view render, since content is injected dynamically via innerHTML
+      },
+    };
+  </script>
+  <script type="text/javascript" id="MathJax-script" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+
+  <style>
+    /* Critical splash-screen CSS inlined so it paints before Tailwind's
+       bundled stylesheet finishes loading — prevents a flash of
+       unstyled content on slow connections. */
+    #splash-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #4f46e5;
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+    #splash-screen.splash-fade-out {
+      opacity: 0;
+      transform: scale(1.03);
+      pointer-events: none;
+    }
+    #splash-screen .splash-mark {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    #splash-screen .splash-title {
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: -0.01em;
+    }
+    #splash-screen .splash-spinner {
+      margin-top: 24px;
+      width: 24px;
+      height: 24px;
+      border: 2.5px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: splash-spin 0.7s linear infinite;
+    }
+    @keyframes splash-spin {
+      to { transform: rotate(360deg); }
+    }
+    html, body {
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: contain;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased">
+
+  <!-- Splash Screen layer — vanishes automatically once app.js finishes boot() -->
+  <div id="splash-screen">
+    <div class="splash-mark">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2 2 7l10 5 10-5-10-5z"/>
+        <path d="M2 17l10 5 10-5"/>
+        <path d="M2 12l10 5 10-5"/>
+      </svg>
+    </div>
+    <p class="splash-title">QuizBank</p>
+    <div class="splash-spinner"></div>
+  </div>
+
+  <!-- App mount root. app.js's renderView() appends/removes <main> children here directly — no client-side framework virtual DOM, plain DOM manipulation per the Vanilla JS constraint. -->
+  <div id="app-root" class="min-h-screen"></div>
+
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>

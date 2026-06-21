@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Small global overrides not worth expressing as Tailwind utilities */
+* {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hide number input spinners on the HH/MM/SS and per-question-seconds
+   fields in quizSettings.js — they look cramped on mobile and the spec's
+   timer inputs don't need increment arrows. */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}

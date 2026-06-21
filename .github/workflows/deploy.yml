@@ -1,0 +1,65 @@
+name: Deploy to GitHub Pages
+
+# Runs on every push to main (your default branch). Also runs manually via
+# the "Run workflow" button in the Actions tab if you ever need to force a
+# redeploy without pushing a new commit (e.g. after a GitHub Pages outage).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# GitHub Pages deployment needs these two permissions explicitly granted to
+# the workflow's token — without them, the deploy-pages step fails with a
+# 403 even if Pages is correctly enabled in repo settings.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Prevents two deploys from racing if you push twice in quick succession.
+# The newer run cancels the older one rather than letting them both try to
+# publish at once.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        # Using `npm install` rather than `npm ci` because this repo does
+        # not yet have a package-lock.json committed. Once you run
+        # `npm install` locally and commit the generated lockfile, switch
+        # this back to `npm ci` — it's faster and guarantees every CI run
+        # installs the exact same dependency versions, which `npm install`
+        # alone does not.
+        run: npm install
+
+      - name: Build (vite build — uses the /QUIZZES/ base path for production)
+        run: npm run build
+
+      - name: Upload build output as Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
