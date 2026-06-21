@@ -184,6 +184,119 @@ export async function searchQuestions(query) {
 // Data Portal — single entry + bulk import
 // ---------------------------------------------------------------------------
 
+/**
+ * Detects whether a parsed JSON value is a nested Topic object (the shape
+ * produced by the bundled data files AND by the Elite Medical Examiner
+ * generation prompt) rather than a flat question object or array of flat
+ * question objects.
+ *
+ * Distinguishing signal: a Topic has a `subtopics` array; a flat question
+ * never does. This is checked structurally rather than by any "type" field,
+ * since neither the bundled files nor the generation prompt's schema
+ * include one.
+ */
+function isNestedTopicShape(value) {
+  if (Array.isArray(value)) {
+    // An array of nested topics (multiple topics pasted in one go) also
+    // counts — check the first element.
+    return value.length > 0 && isNestedTopicShape(value[0]);
+  }
+  return !!value && typeof value === 'object' && Array.isArray(value.subtopics);
+}
+
+/**
+ * Flattens one or more nested Topic objects into flat question rows plus
+ * topic metadata, mirroring seed.js's flattenTopics() — but deliberately
+ * NOT importing that function directly. seed.js's version is entangled
+ * with SEED_VERSION/bundled-file semantics (it assumes the caller wants to
+ * compare against and overwrite the cached seed version); the Data Portal
+ * importing one topic mid-session should never trigger that machinery.
+ * Keeping this independent means a future change to seed-versioning logic
+ * can't silently change Data Portal import behavior.
+ *
+ * @param {object[]} topics - array of nested Topic objects
+ * @returns {{ questionRows: object[], topicMetaEntries: object[] }}
+ */
+function flattenNestedTopics(topics) {
+  const questionRows = [];
+  const topicMetaEntries = [];
+
+  for (const topic of topics) {
+    const subtopicMeta = [];
+
+    for (const subtopic of topic.subtopics || []) {
+      for (const q of subtopic.questions || []) {
+        questionRows.push({
+          ...q,
+          topicId: topic.id,
+          subtopicId: subtopic.id,
+        });
+      }
+
+      subtopicMeta.push({
+        id: subtopic.id,
+        topicId: topic.id,
+        title: subtopic.title,
+        totalQuestions: (subtopic.questions || []).length,
+        summaryText: subtopic.summaryText || '',
+      });
+    }
+
+    topicMetaEntries.push({
+      id: topic.id,
+      title: topic.title,
+      totalQuestions: subtopicMeta.reduce((sum, s) => sum + s.totalQuestions, 0),
+      summaryText: topic.summaryText || '',
+      subtopics: subtopicMeta,
+    });
+  }
+
+  return { questionRows, topicMetaEntries };
+}
+
+/**
+ * Merges newly-imported topic metadata into the cached topicMeta array
+ * used by Study Home, the Quiz Builder, and the Summary Primer.
+ *
+ * If a topic id already exists in the cache, its subtopics are merged
+ * (new subtopics appended, existing subtopics with matching ids replaced
+ * with the freshly-imported version — e.g. re-importing an updated
+ * summaryText) rather than duplicating the whole topic entry. A brand-new
+ * topic id is appended as a new top-level entry.
+ */
+async function mergeTopicMetaCache(newTopicEntries) {
+  const existingRow = await db.get(db.STORES.META, 'topicMeta');
+  const existing = existingRow ? existingRow.value : [];
+  const existingById = new Map(existing.map((t) => [t.id, t]));
+
+  for (const incoming of newTopicEntries) {
+    const current = existingById.get(incoming.id);
+
+    if (!current) {
+      existingById.set(incoming.id, incoming);
+      continue;
+    }
+
+    const subtopicsById = new Map(current.subtopics.map((s) => [s.id, s]));
+    for (const incomingSub of incoming.subtopics) {
+      subtopicsById.set(incomingSub.id, incomingSub);
+    }
+    const mergedSubtopics = Array.from(subtopicsById.values());
+
+    existingById.set(incoming.id, {
+      id: incoming.id,
+      title: incoming.title || current.title,
+      summaryText: incoming.summaryText || current.summaryText,
+      totalQuestions: mergedSubtopics.reduce((sum, s) => sum + s.totalQuestions, 0),
+      subtopics: mergedSubtopics,
+    });
+  }
+
+  const merged = Array.from(existingById.values());
+  await db.put(db.STORES.META, { key: 'topicMeta', value: merged });
+  return merged;
+}
+
 const REQUIRED_FIELDS = ['topicId', 'subtopicId', 'id', 'questionText', 'options', 'correctIndex'];
 
 /**
@@ -214,15 +327,13 @@ export function validateQuestionObject(obj) {
 }
 
 /**
- * Imports a single question (from the real-time entry form) or an array
- * of questions (from the bulk import textarea) into the QUESTIONS store,
- * and ensures matching PROGRESS rows exist.
- *
- * @param {object|object[]} input
- * @returns {Promise<{ imported: number, errors: {index:number, errors:string[]}[] }>}
+ * Imports flat question objects directly into QUESTIONS + PROGRESS. This is
+ * the original Data Portal behavior, used for Single Entry mode and for
+ * Bulk Import when the pasted JSON is a flat array of question objects
+ * (each one already carrying its own topicId/subtopicId, per
+ * REQUIRED_FIELDS) rather than a nested Topic structure.
  */
-export async function importQuestions(input) {
-  const list = Array.isArray(input) ? input : [input];
+async function importFlatQuestions(list) {
   const valid = [];
   const errorReport = [];
 
@@ -258,7 +369,91 @@ export async function importQuestions(input) {
     invalidateSearchIndex();
   }
 
-  return { imported: valid.length, errors: errorReport };
+  return { imported: valid.length, errors: errorReport, topicsImported: 0 };
+}
+
+/**
+ * Imports one or more nested Topic objects (the shape produced by the
+ * bundled data files AND by the Elite Medical Examiner generation prompt:
+ * { id, title, summaryText, subtopics: [{ id, title, summaryText,
+ * questions: [...] }] }).
+ *
+ * Each individual question inside the structure is still run through
+ * validateQuestionObject — a malformed question nested three levels deep
+ * shouldn't silently corrupt the whole import, it should be reported with
+ * the same per-question error detail as flat imports get. Note that
+ * questions in this nested shape do NOT need to carry their own
+ * topicId/subtopicId (flattenNestedTopics derives and overwrites those
+ * from the parent topic/subtopic, exactly like seed.js does for bundled
+ * files) — so validation runs AFTER flattening, not before.
+ */
+async function importNestedTopics(topics) {
+  const { questionRows, topicMetaEntries } = flattenNestedTopics(topics);
+
+  const valid = [];
+  const errorReport = [];
+
+  questionRows.forEach((obj, index) => {
+    const errors = validateQuestionObject(obj);
+    if (errors.length > 0) {
+      errorReport.push({ index, errors });
+    } else {
+      valid.push(obj);
+    }
+  });
+
+  if (valid.length > 0) {
+    await db.bulkPut(db.STORES.QUESTIONS, valid);
+
+    const existingProgress = await db.getAll(db.STORES.PROGRESS);
+    const existingIds = new Set(existingProgress.map((r) => r.id));
+    const newProgressRows = valid
+      .filter((q) => !existingIds.has(q.id))
+      .map((q) => ({
+        id: q.id,
+        topicId: q.topicId,
+        subtopicId: q.subtopicId,
+        status: 'unseen',
+        flagged: false,
+        lastAttemptAt: null,
+      }));
+
+    if (newProgressRows.length > 0) {
+      await db.bulkPut(db.STORES.PROGRESS, newProgressRows);
+    }
+
+    await mergeTopicMetaCache(topicMetaEntries);
+    invalidateSearchIndex();
+  }
+
+  return { imported: valid.length, errors: errorReport, topicsImported: topicMetaEntries.length };
+}
+
+/**
+ * Imports a single flat question (from the real-time entry form), an array
+ * of flat questions, OR one/more nested Topic objects (from the bulk
+ * import textarea) into the QUESTIONS store, ensuring matching PROGRESS
+ * rows exist and — for the nested-topic case — merging topic/subtopic
+ * metadata (titles, summaryText, counts) into the cached topicMeta that
+ * Study Home, the Quiz Builder, and the Summary Primer all read from.
+ *
+ * Shape is detected structurally (see isNestedTopicShape): a Topic object
+ * has a `subtopics` array, a flat question never does. This lets the same
+ * Bulk Import textarea accept either the output of the Elite Medical
+ * Examiner generation prompt (nested) or a simpler flat question array,
+ * without the user needing to specify which.
+ *
+ * @param {object|object[]} input
+ * @returns {Promise<{ imported: number, errors: {index:number, errors:string[]}[], topicsImported: number }>}
+ */
+export async function importQuestions(input) {
+  if (isNestedTopicShape(input)) {
+    const topics = Array.isArray(input) ? input : [input];
+    return importNestedTopics(topics);
+  }
+
+  const list = Array.isArray(input) ? input : [input];
+  return importFlatQuestions(list);
 }
 
 /** The example structure block shown in the Data Portal UI, as a formatted string. */

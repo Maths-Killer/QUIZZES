@@ -1,7 +1,12 @@
 /**
  * views/dataPortal.js — In-App Data Portal.
- * Real-time entry of a single question object, or a bulk import textarea
- * for raw text arrays, with a required example structure block displayed.
+ *
+ * Single Entry: one flat question object, for quick one-off additions.
+ * Bulk Import: accepts EITHER a flat array of question objects, OR one or
+ * more nested Topic objects (the { id, title, summaryText, subtopics: [...] }
+ * shape produced by bundled data files and by the Elite Medical Examiner
+ * generation prompt). questionRepository.importQuestions() detects which
+ * shape was pasted automatically — the user never needs to specify which.
  */
 
 import { importQuestions, EXAMPLE_SCHEMA_BLOCK } from '../../data/questionRepository.js';
@@ -19,8 +24,9 @@ export async function renderDataPortal(container, params, router) {
         </div>
 
         <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
-          <p class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Required Example Structure</p>
+          <p class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Required Example Structure (Single Entry)</p>
           <pre class="text-[11px] text-slate-600 overflow-x-auto whitespace-pre leading-relaxed">${escapeText(EXAMPLE_SCHEMA_BLOCK)}</pre>
+          <p class="text-xs text-slate-500 mt-3">Bulk Import also accepts a full nested <strong>Topic</strong> object — <code class="text-[11px] bg-slate-100 px-1 rounded">{ id, title, summaryText, subtopics: [{ id, title, summaryText, questions: [...] }] }</code> — the format produced by question-generation prompts. Shape is detected automatically.</p>
         </div>
 
         <div id="single-entry-panel" class="bg-white rounded-xl border border-slate-200 p-4">
@@ -28,7 +34,7 @@ export async function renderDataPortal(container, params, router) {
         </div>
 
         <div id="bulk-import-panel" class="hidden bg-white rounded-xl border border-slate-200 p-4">
-          <textarea id="bulk-import-textarea" rows="14" placeholder="Paste a JSON array of question objects here…" class="w-full text-xs font-mono border border-slate-200 rounded-lg p-3 focus:outline-none focus:border-indigo-400"></textarea>
+          <textarea id="bulk-import-textarea" rows="14" placeholder="Paste a JSON array of question objects, OR a nested Topic object/array of Topic objects…" class="w-full text-xs font-mono border border-slate-200 rounded-lg p-3 focus:outline-none focus:border-indigo-400"></textarea>
         </div>
 
         <div id="import-feedback" class="hidden rounded-xl p-3 text-sm"></div>
@@ -84,18 +90,20 @@ export async function renderDataPortal(container, params, router) {
     importBtn.textContent = 'Importing…';
 
     try {
-      const { imported, errors } = await importQuestions(parsed);
+      const { imported, errors, topicsImported } = await importQuestions(parsed);
 
       if (imported > 0 && errors.length === 0) {
-        showFeedback(`Successfully imported ${imported} question${imported > 1 ? 's' : ''}.`, 'success');
+        const topicSuffix = topicsImported > 0 ? ` across ${topicsImported} topic${topicsImported > 1 ? 's' : ''}` : '';
+        showFeedback(`Successfully imported ${imported} question${imported > 1 ? 's' : ''}${topicSuffix}.`, 'success');
         if (portalMode === 'single') {
           container.querySelector('#single-entry-textarea').value = '';
         } else {
           container.querySelector('#bulk-import-textarea').value = '';
         }
       } else if (imported > 0 && errors.length > 0) {
+        const topicSuffix = topicsImported > 0 ? ` across ${topicsImported} topic${topicsImported > 1 ? 's' : ''}` : '';
         showFeedback(
-          `Imported ${imported} question${imported > 1 ? 's' : ''}, but ${errors.length} entr${errors.length > 1 ? 'ies' : 'y'} failed validation:\n` +
+          `Imported ${imported} question${imported > 1 ? 's' : ''}${topicSuffix}, but ${errors.length} entr${errors.length > 1 ? 'ies' : 'y'} failed validation:\n` +
             errors.map((e) => `#${e.index}: ${e.errors.join('; ')}`).join('\n'),
           'warning'
         );
