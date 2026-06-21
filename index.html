@@ -7,6 +7,27 @@
   <title>QuizBank — Devotional-style Local Quiz App</title>
 
   <!--
+    Eruda debug console — OPT-IN ONLY via ?debug=1 in the URL.
+    Visit https://maths-killer.github.io/QUIZZES/?debug=1 to see a mobile
+    console (logs, errors, network, DOM inspector) without needing a
+    desktop browser or USB debugging. Remove this block (or just stop
+    visiting the URL with ?debug=1) once you no longer need it — it has
+    zero effect on every normal visit since the check below short-circuits
+    immediately when the param is absent.
+  -->
+  <script>
+    if (new URLSearchParams(window.location.search).get('debug') === '1') {
+      var erudaScript = document.createElement('script');
+      erudaScript.src = 'https://cdn.jsdelivr.net/npm/eruda';
+      erudaScript.onload = function () {
+        eruda.init();
+        console.log('[debug] Eruda console active — tap the floating button to open it.');
+      };
+      document.head.appendChild(erudaScript);
+    }
+  </script>
+
+  <!--
     MathJax initialization — configured before the MathJax script loads,
     per MathJax v3 convention (window.MathJax must exist before main.js
     parses). Tuned for mobile screen scaling: scale set relative to
