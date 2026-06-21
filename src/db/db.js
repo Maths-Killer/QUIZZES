@@ -183,6 +183,14 @@ async function clearStore(storeName) {
  * Queries an index with an optional IDBKeyRange and returns matching records.
  * This is the workhorse for "all questions in topic X" type lookups —
  * uses a cursor over the index, never a full-store getAll() + filter.
+ *
+ * IMPORTANT: keyRangeOrValue must be a valid IndexedDB key type — string,
+ * number, Date, or binary (or an array of those for compound indexes).
+ * Booleans are NOT a valid IndexedDB key and will throw a DataError from
+ * IDBKeyRange.only() if passed here. If you need to query/index a boolean
+ * field, don't add an index for it at all (it only ever has 2 buckets, so
+ * an index provides negligible benefit) — instead use db.getAll() and
+ * filter in memory, the way getFlaggedQuestionIds() in progress.js does.
  */
 async function queryIndex(storeName, indexName, keyRangeOrValue) {
   const db = await openDB();
@@ -198,6 +206,9 @@ async function queryIndex(storeName, indexName, keyRangeOrValue) {
  * Counts records matching an index value WITHOUT materializing them.
  * Critical for large datasets — counting 5,000 progress rows by topic
  * should not deserialize every row into memory.
+ *
+ * Same key-type restriction as queryIndex() above applies here — see that
+ * function's doc comment.
  */
 async function countByIndex(storeName, indexName, keyRangeOrValue) {
   const db = await openDB();

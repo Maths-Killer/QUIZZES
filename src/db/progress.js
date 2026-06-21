@@ -7,9 +7,11 @@
  * questions don't count toward completion, but flagged status is tracked
  * separately and doesn't affect completion math.
  *
- * Every function here is index-driven (countByIndex / queryIndex), so
+ * Most functions here are index-driven (countByIndex / queryIndex), so
  * computing progress for a 5,000-question bank never deserializes the
- * full question or progress store into memory.
+ * full question or progress store into memory. The exception is
+ * getFlaggedQuestionIds() — see its own doc comment for why booleans
+ * can't be queried via an IndexedDB index at all, not just here.
  */
 
 import db from './db.js';
@@ -127,11 +129,30 @@ export async function toggleFlag(questionId) {
   return updated.flagged;
 }
 
+/**
+ * Returns ids of all flagged questions.
+ *
+ * Deliberately NOT index-driven, unlike most of this file. IndexedDB key
+ * ranges (IDBKeyRange.only/etc.) only accept string/number/Date/binary
+ * keys — booleans are not a valid IndexedDB key type and throw a DataError
+ * if you try to query an index on one. A boolean field also only ever has
+ * 2 buckets, so an index provides negligible benefit anyway. This is
+ * called from the Review Matrix screen (infrequent, dashboard-tier), the
+ * same usage tier as getGlobalProgress() above, so a single getAll() +
+ * in-memory filter is the correct tradeoff here, not a performance risk.
+ */
 export async function getFlaggedQuestionIds() {
-  const rows = await db.queryIndex(db.STORES.PROGRESS, 'by_flagged', true);
-  return rows.map((r) => r.id);
+  const allProgress = await db.getAll(db.STORES.PROGRESS);
+  return allProgress.filter((r) => r.flagged === true).map((r) => r.id);
 }
 
+/**
+ * Returns ids of all failed (incorrectly answered) questions.
+ * 'status' IS a valid string index key, so this stays index-driven —
+ * kept structurally parallel to getFlaggedQuestionIds() above so the two
+ * functions read the same way at the call site, but the underlying
+ * implementation differs because the underlying key types differ.
+ */
 export async function getFailedQuestionIds() {
   const rows = await db.queryIndex(db.STORES.PROGRESS, 'by_status', 'incorrect');
   return rows.map((r) => r.id);
