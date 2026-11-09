@@ -2,6 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <!--
+    Private study link. Visiting  https://maths-killer.github.io/QUIZZES/?user=racheal
+    (or ?quiz=cbg430) jumps straight to the standalone CBG 430 quiz in /cbg430/
+    and never loads the main QuizBank app, so none of the other quizzes show.
+    The plain link (no parameter) is unchanged. Runs first, before anything else.
+  -->
+  <script>
+    (function () {
+      try {
+        var p = new URLSearchParams(window.location.search);
+        var u = (p.get('user') || '').trim().toLowerCase();
+        var z = (p.get('quiz') || '').trim().toLowerCase();
+        if (u === 'racheal' || z === 'cbg430') {
+          window.location.replace(new URL('cbg430/', window.location.href).href.split('?')[0]);
+        }
+      } catch (e) {}
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
   <meta name="theme-color" content="#4f46e5" />
   <title>QuizBank — Devotional-style Local Quiz App</title>

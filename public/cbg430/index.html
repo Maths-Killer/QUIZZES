@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>CBG 430 Population Genetics Quiz</title>
+<style>
+:root{--bg:#1E2127;--fg:#E6E1D6;--panel:#272B33;--muted:#9AA0A8;--gold:#E5C07B;--blue:#61AFEF;--green:#98C379;--red:#E06C75;--purple:#C678DD;--teal:#56B6C2;--orange:#D19A66}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:0 14px calc(24px + env(safe-area-inset-bottom))}
+main{max-width:640px;margin:0 auto}
+h1{font-size:1.4rem;color:var(--gold);margin:18px 0 4px}
+h2{font-size:1.1rem;color:var(--blue);margin:18px 0 8px}
+.muted{color:var(--muted);font-size:.9rem}
+.card{background:var(--panel);border-radius:12px;padding:14px;margin:12px 0}
+label.f{display:block;color:var(--muted);font-size:.85rem;margin:10px 0 4px}
+select,input[type=text]{width:100%;background:var(--bg);color:var(--fg);border:1px solid #3a404a;border-radius:8px;padding:11px;font-size:1rem}
+button{font:inherit;border:0;border-radius:10px;padding:12px 16px;background:#343a45;color:var(--fg);cursor:pointer}
+button.p{background:var(--gold);color:#1E2127;font-weight:700;width:100%;margin-top:12px}
+button:active{opacity:.8}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.row button{flex:1;min-width:110px}
+.bar{height:6px;background:#343a45;border-radius:3px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--teal)}
+.tags{font-size:.78rem;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+.tag{background:#343a45;border-radius:6px;padding:2px 7px}
+.q{font-size:1.12rem;margin:10px 0}
+.opt{display:block;width:100%;text-align:left;margin:8px 0;background:var(--bg);border:1px solid #3a404a}
+.opt.sel{border-color:var(--gold);background:#3a3524}
+.opt.ok{border-color:var(--green);background:#26331f}.opt.bad{border-color:var(--red);background:#3a2226}
+.box{border-left:4px solid;border-radius:6px;padding:8px 12px;margin:10px 0;background:var(--bg)}
+.box b.t{display:block;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+.ans{border-color:var(--green)}.ans b.t{color:var(--green)}
+.baby{border-color:var(--teal)}.baby b.t{color:var(--teal)}
+.sol{border-color:var(--blue)}.sol b.t{color:var(--blue)}
+.mis{border-color:var(--red)}.mis b.t{color:var(--red)}
+.flag{border-color:var(--orange)}.flag b.t{color:var(--orange)}
+.you{border-color:var(--muted)}.you b.t{color:var(--muted)}
+.res{font-weight:700;margin:8px 0}.res.g{color:var(--green)}.res.r{color:var(--red)}.res.o{color:var(--orange)}
+.stat{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #343a45;gap:10px}
+.hide{display:none}
+details.rv{background:var(--panel);border-radius:12px;margin:10px 0;padding:0 12px}
+details.rv summary{padding:12px 0;cursor:pointer;list-style:none}
+details.rv summary::-webkit-details-marker{display:none}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px}
+.dot.g{background:var(--green)}.dot.r{background:var(--red)}
+</style></head><body><main id="app"><div class="muted" style="margin-top:20px">Loading questions…</div></main>
+<script>
+let Q=[];
+const KEY='cbg430quiz_v1';
+let S;try{S=JSON.parse(localStorage.getItem(KEY))||{}}catch(e){S={}}
+S.res=S.res||{};S.mode=S.mode||'now';
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+const $=s=>document.querySelector(s);
+const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function fmt(t){let h=esc(t);
+ h=h.replace(/\^\(?(-?[0-9.]+)\)?/g,'<sup>$1</sup>');
+ return h.replace(/\n/g,'<br>')}
+const TN={1:'Tier 1 · Recall',2:'Tier 2 · Simple',3:'Tier 3 · Intermediate',4:'Tier 4 · Advanced'};
+let secs=[],deck=[],i=0,ans=[],mode='now',sel=null;
+
+/* ---------- loading the question file ---------- */
+async function load(){
+ try{
+  const r=await fetch('questions.json',{cache:'no-cache'});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  setQ(await r.json());
+ }catch(e){
+  $('#app').innerHTML=`<h1>CBG 430 Population Genetics Quiz</h1>
+  <div class="box mis"><b class="t">Could not load questions.json</b>
+  Keep <b>questions.json</b> in the same folder as index.html and open the quiz through your local server (a browser blocks reading it when index.html is opened straight from a file).
+  <div class="muted" style="margin-top:6px">${esc(e.message)}</div></div>
+  <div class="card"><label class="f">Or pick questions.json yourself</label><input type="file" id="pick" accept=".json,application/json"></div>`;
+  $('#pick').onchange=async ev=>{try{setQ(JSON.parse(await ev.target.files[0].text()))}catch(x){alert('That file is not valid JSON.')}};
+ }
+}
+function setQ(j){Q=Array.isArray(j)?j:j.questions;secs=[...new Set(Q.map(q=>q.section))].sort();home()}
+
+/* ---------- answer checking ---------- */
+const SUP={'⁰':'0','¹':'1','²':'2','³':'3','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9','⁻':'-'};
+function unsup(s){return s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]+/g,m=>'^'+[...m].map(c=>SUP[c]).join(''))}
+function parseNum(t){const r=parseNumX(t);return r?r.v:NaN}
+function parseNumX(t){
+ let s=unsup(String(t)).toLowerCase().replace(/(\d),(?=\d{3}\b)/g,'$1');
+ let m=s.match(/(-?\d*\.?\d+)\s*(?:x|×|\*)\s*10\s*\^?\s*\(?(-?\d+)\)?/);
+ if(m)return {v:parseFloat(m[1])*Math.pow(10,parseInt(m[2])),end:m.index+m[0].length,s};
+ m=s.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/);
+ return m?{v:parseFloat(m[0]),end:m.index+m[0].length,s}:null;
+}
+function allNums(t){return (String(t).replace(/(\d),(?=\d{3}\b)/g,'$1').match(/\d*\.?\d+(?:e[-+]?\d+)?/g)||[]).map(parseFloat).filter(x=>!isNaN(x))}
+function normTxt(t){
+ return unsup(String(t)).toLowerCase().replace(/\^/g,'').replace(/[‘’`´]/g,"'")
+  .replace(/\b(the|a|an)\b/g,' ').replace(/\bten thousand\b/g,'10000').replace(/\bfifty\b/g,'50').replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\b/g,m=>({zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10})[m]).replace(/\bfluids?$/,' ').replace(/[^a-z0-9\-\/ ]/g,' ').replace(/\s+/g,' ').trim();
+}
+function lev(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;let p=[...Array(n+1).keys()];
+ for(let x=1;x<=m;x++){let c=[x];for(let y=1;y<=n;y++)c[y]=Math.min(p[y]+1,c[y-1]+1,p[y-1]+(a[x-1]==b[y-1]?0:1));p=c}return p[n]}
+function sameTxt(a,b){a=normTxt(a);b=normTxt(b);if(a===b)return true;
+ if(a.replace(/[ \-]/g,'')===b.replace(/[ \-]/g,''))return true;
+ if(/[0-9]/.test(b))return false;
+ return b.length>=6&&lev(a,b)<=1}
+function unitDict(u){
+ u=unsup(u).toLowerCase().replace(/\^/g,'').replace(/[()]/g,' ');const d={};let neg=false;
+ const re=/([\/·*]|per)|([a-z]+)(-?\d+)?/g;let m;
+ while((m=re.exec(u))){if(m[1]){if(m[1]=='/'||m[1]=='per')neg=true;continue}
+  const p=m[3]?parseInt(m[3]):1;d[m[2]]=(d[m[2]]||0)+(neg?-p:p)}
+ return d}
+function sameUnit(a,b){const x=unitDict(a),y=unitDict(b),k=new Set([...Object.keys(x),...Object.keys(y)]);
+ for(const j of k)if((x[j]||0)!==(y[j]||0))return false;return true}
+let TERMS=null;
+function terms(){if(TERMS)return TERMS;const t=new Set();
+ Q.forEach(q=>{if(q.type=='fill')String(q.answer).split(',').forEach(x=>t.add(normTxt(x)));
+  if(q.type=='mcq'&&q.options[q.answer]&&String(q.options[q.answer]).length<28)t.add(normTxt(q.options[q.answer]))});
+ return TERMS=[...t].filter(x=>x.length>=4)}
+function diagNum(q,typed){
+ const A=parseNumX(q.answer),T=parseNumX(typed),notes=[];
+ if(!A||!T)return {status:'wrong',notes:['I could not find a number in your answer. Type the final value, for example 0.72 N m^-2.']};
+ const a=A.v,t=T.v,au=String(q.answer).slice(A.end).trim(),tu=T.s.slice(T.end).trim();
+ const rel=a===0?(Math.abs(t)<1e-9?0:Infinity):Math.abs(t-a)/Math.abs(a);
+ if(rel<=0.01){
+  if(au&&tu&&!sameUnit(au,tu))notes.push(`Number is right, but check the unit. The notes' answer uses <b>${fmt(au)}</b>. In an exam this loses the unit mark.`);
+  else if(au&&!tu)notes.push(`Number is right. Remember to write the unit: <b>${fmt(au)}</b>.`);
+  return {status:'ok',notes};
+ }
+ if(rel<=0.05)return {status:'close',notes:[`Very close (you got ${t}, expected about ${a}). This looks like a <b>rounding slip</b>. Keep 4 significant figures until the last step and round only at the end.`]};
+ const cm=allNums(q.common_mistake||'');
+ if(cm.some(x=>x!==0&&Math.abs(x-t)/Math.abs(x)<0.01))return {status:'wrong',notes:[`Your value matches the <b>common mistake</b> for this question: ${fmt(q.common_mistake)}`]};
+ const given=allNums(q.question);
+ if(given.some(x=>x===t))notes.push(`${fmt(String(t))} is one of the numbers <b>given in the question</b>, not the result. A step is missing between the data and the answer.`);
+ const r=t/a;
+ if(a!==0&&t!==0){
+  if(Math.abs(r+1)<0.02)notes.push('Right size but the <b>sign</b> is opposite. Check the subtraction or the order of terms.');
+  let gHit=false;
+  const k=Math.round(Math.log10(Math.abs(r)));
+  if(!gHit&&k!==0&&r>0&&Math.abs(Math.abs(r)/Math.pow(10,k)-1)<0.03){
+   notes.push(Math.abs(k)==3?`Off by a factor of <b>1000</b>. Check a unit conversion such as mm to m, or g to kg.`:(Math.abs(k)==2?`Off by a factor of <b>100</b>. Check cm to m, or a percentage.`:`Off by a factor of <b>10<sup>${k}</sup></b>. Check a unit conversion or a misplaced decimal point.`));
+  }
+  if(a<1&&a>0){
+   if(Math.abs(t-Math.sqrt(a))/Math.sqrt(a)<0.02)notes.push('Your answer is the <b>square root</b> of the correct one. You took a root that was not needed. You only take the root to go from q<sup>2</sup> to q.');
+   if(Math.abs(t-a*a)/(a*a)<0.02)notes.push('Your answer is the correct one <b>squared</b>. You may have squared a value that was already p<sup>2</sup>, q<sup>2</sup> or a mating frequency.');
+   if(t>0&&t<1&&Math.abs(t-(1-a))/(1-a)<0.02)notes.push('Your answer is <b>1 minus</b> the correct one. You may have given p when q was asked, or the other way round. Check which allele or genotype the question names.');
+  }
+  if(a>1&&t<=1&&given.some(g=>g>1&&Math.abs(t*g-a)/a<0.01))notes.push('You gave a <b>proportion</b>. This question wants a <b>number of people</b>. Multiply by the total N.');
+  if(a<=1&&t>1&&given.some(g=>g>1&&Math.abs(t/g-a)/a<0.01))notes.push('You gave a <b>number of people</b>. This question wants a <b>frequency</b>. Divide by the total.');
+  if(Math.abs(r-2)<0.03)notes.push('Your answer is <b>double</b> the correct one. For allele frequencies you may have divided by N instead of 2N. Each person carries two alleles, so the total is 2N.');
+  if(Math.abs(r-0.5)<0.02)notes.push('Your answer is <b>half</b> the correct one. For a heterozygote you may have used pq instead of 2pq. For allele counts you may have divided by 4N.');
+ }
+ if(!notes.length)notes.push('This is not close to the expected value. Compare your working with the Exam solution below, step by step, starting with the formula.');
+ return {status:'wrong',notes};
+}
+function cp(a,b){let n=0;while(n<a.length&&n<b.length&&a[n]==b[n])n++;return n}
+function diagText(q,typed){
+ const want=String(q.answer).split(',').map(x=>x.trim());
+ const got=want.length>1?typed.split(/[,;\/]|\band\b/).map(x=>x.trim()).filter(Boolean):[typed.trim()];
+ const notes=[];let allOk=true,near=false,hard=false;
+ if(want.length>1&&got.length!=want.length){hard=true;notes.push(`This question has <b>${want.length} blanks</b>; I found ${got.length} answer${got.length==1?'':'s'}. Separate them with commas.`)}
+ want.forEach((w,k)=>{
+  const here=want.length>1?(got[k]!==undefined&&sameTxt(got[k],w)):got.some(g=>sameTxt(g,w));
+  if(here)return;
+  allOk=false;
+  if(want.length>1&&got.some(g=>sameTxt(g,w))){hard=true;notes.push(`Blank ${k+1}: the right term <b>${esc(w)}</b> is there, but in the <b>wrong place</b>. Check which term goes in which blank.`);return}
+  const g=got[k]!==undefined?got[k]:null;const lbl=want.length>1?`Blank ${k+1}: `:'';
+  if(g===null){hard=true;notes.push(`${lbl}no answer given.`);return}
+  const ng=normTxt(g),nw=normTxt(w),d=lev(ng,nw);
+  if(nw.length>=5&&d<=3&&d>0){near=true;notes.push(`${lbl}<b>spelling slip</b>. You wrote "${esc(g)}", the term is <b>${esc(w)}</b>.`)}
+  else if(ng.length>=3&&nw.length>=5&&(cp(ng,nw)>=3||nw.includes(ng)||ng.includes(nw))){near=true;notes.push(`${lbl}right root, wrong form. You wrote "${esc(g)}", the notes use <b>${esc(w)}</b>.`)}
+  else{hard=true;notes.push(terms().includes(ng)?`${lbl}"${esc(g)}" is a real term in these notes, but it belongs to a different idea. Re-read what this blank is describing.`:`${lbl}"${esc(g)}" is not the term used in the notes.`)}
+ });
+ if(allOk)return {status:'ok',notes:[]};
+ if(q.common_mistake&&hard)notes.push('Common mistake here: '+fmt(q.common_mistake));
+ return {status:near&&!hard?'close':'wrong',notes};
+}
+function diagnose(q,typed){
+ typed=String(typed||'').trim();if(!typed)return {status:'wrong',notes:[]};
+ return q.type=='numerical'?diagNum(q,typed):diagText(q,typed);
+}
+function check(q,typed){return diagnose(q,typed).status==='ok'}
+
+/* ---------- screens ---------- */
+function home(){
+ const done=Object.keys(S.res).length,right=Object.values(S.res).filter(x=>x).length;
+ const wrong=Q.filter(q=>S.res[q.id]===false).length;
+ $('#app').innerHTML=`<h1>CBG 430 Population Genetics Quiz</h1>
+ <div class="muted">${Q.length} questions · ${done} attempted · ${right} correct · ${wrong} to review</div>
+ <div class="bar"><i style="width:${done/Q.length*100}%"></i></div>
+ <div class="card">
+ <label class="f">Tier</label><select id="tier"><option value="">All tiers</option>${[1,2,3,4].map(t=>`<option value="${t}">${TN[t]} (${Q.filter(q=>q.tier==t).length})</option>`).join('')}</select>
+ <label class="f">Topic</label><select id="sec"><option value="">All topics</option>${secs.map(s=>`<option>${esc(s)}</option>`).join('')}</select>
+ <label class="f">Type</label><select id="typ"><option value="">All types</option><option value="mcq">Multiple choice</option><option value="tf">True / False</option><option value="fill">Fill the blank</option><option value="numerical">Calculation</option></select>
+ <label class="f">Which questions</label><select id="which"><option value="all">All</option><option value="new">Not attempted yet</option><option value="wrong">Ones I got wrong</option></select>
+ <label class="f">Order</label><select id="ord"><option value="seq">In order (Tier 1 first)</option><option value="shuf">Shuffled</option></select>
+ <label class="f">Show answers</label><select id="mode"><option value="now">After each question</option><option value="end">At the end of the quiz</option></select>
+ <button class="p" id="go">Start</button></div>
+ <div class="row"><button id="stats">Progress by topic</button><button id="reset">Reset progress</button></div>
+ <div class="card"><div class="muted">Study book (PDF, dark, phone size)</div><a href="cbg430-population-genetics-dark.pdf" style="color:var(--gold);font-weight:700">Open the study book</a></div>`;
+ $('#mode').value=S.mode;$('#mode').onchange=()=>{S.mode=$('#mode').value;save()};
+ $('#go').onclick=start;$('#stats').onclick=stats;
+ $('#reset').onclick=()=>{if(confirm('Erase all progress?')){S.res={};save();home()}};
+}
+function start(){
+ const t=$('#tier').value,s=$('#sec').value,ty=$('#typ').value,w=$('#which').value,o=$('#ord').value;mode=$('#mode').value;
+ deck=Q.filter(q=>(!t||q.tier==t)&&(!s||q.section==s)&&(!ty||q.type==ty)&&(w=='all'||(w=='new'&&!(q.id in S.res))||(w=='wrong'&&S.res[q.id]===false)));
+ if(!deck.length){alert('No questions match those choices.');return}
+ if(o=='shuf')deck.sort(()=>Math.random()-.5);
+ i=0;ans=deck.map(()=>null);show();
+}
+function isPick(q){return q.type=='mcq'||q.type=='tf'}
+function show(){
+ if(i>=deck.length)return finish();
+ const q=deck[i];sel=null;
+ let body='';
+ if(isPick(q)){
+  body=Object.entries(q.options).map(([k,v])=>`<button class="opt" data-k="${esc(k)}">${q.type=='mcq'?'<b>'+esc(k)+'.</b> ':''}${fmt(v)}</button>`).join('');
+ }else{
+  body=`<input type="text" id="typed" placeholder="${q.type=='numerical'?'Type your answer (number, unit optional)':'Type your answer'+(String(q.answer).includes(',')?' (separate blanks with commas)':'')}" autocomplete="off" autocapitalize="off">`;
+ }
+ const lastLbl=i+1<deck.length?'Next':'Finish';
+ $('#app').innerHTML=`<div class="muted">Question ${i+1} of ${deck.length}</div>
+ <div class="bar"><i style="width:${i/deck.length*100}%"></i></div>
+ <div class="tags"><span class="tag">${TN[q.tier]}</span><span class="tag">${esc(q.section)}</span><span class="tag">notes p.${q.notes_page}</span></div>
+ <div class="q">${fmt(q.question)}</div><div id="body">${body}</div>
+ <button class="p" id="sub">${mode=='now'?'Check answer':lastLbl}</button>
+ <div id="fb"></div>
+ <div class="row"><button id="skip">${mode=='now'?"I don't know":'Skip'}</button><button id="quit">Quit</button></div>`;
+ $('#quit').onclick=()=>{if(confirm('Quit this quiz? Answers already checked stay saved.'))home()};
+ document.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{if(ans[i]&&mode=='now')return;sel=b.dataset.k;document.querySelectorAll('.opt').forEach(x=>x.classList.toggle('sel',x===b))});
+ const ti=$('#typed');if(ti){ti.focus();ti.onkeydown=e=>{if(e.key=='Enter')$('#sub').click()}}
+ $('#sub').onclick=submit;$('#skip').onclick=()=>submit(true);
+}
+function record(idx,ok){S.res[deck[idx].id]=ok;save()}
+function submit(skip){
+ if(ans[i])return;
+ const q=deck[i];let resp=skip===true?'':(isPick(q)?sel:($('#typed').value||'').trim());
+ if(!skip&&!resp){alert(isPick(q)?'Pick an option first, or use Skip.':'Type an answer first, or use Skip.');return}
+ const dg=resp&&!isPick(q)?diagnose(q,resp):null;
+ const ok=resp?(isPick(q)?resp===q.answer:dg.status==='ok'):false;
+ ans[i]={resp,ok,skipped:!resp,diag:dg};record(i,ok);
+ if(mode=='end'){i++;show();window.scrollTo(0,0);return}
+ feedback();
+}
+function diagBox(a){if(!a||!a.diag||!a.diag.notes.length)return '';
+ return `<div class="box flag"><b class="t">${a.ok?'Check this':'What went wrong'}</b>${a.diag.notes.map(n=>`<div style="margin:4px 0">${n}</div>`).join('')}</div>`}
+function answerText(q){return q.type=='mcq'?`${esc(q.answer)}. ${fmt(q.options[q.answer]||'')}`:fmt(q.answer)}
+function respText(q,r){if(!r)return '<i>no answer</i>';return q.type=='mcq'?`${esc(r)}. ${fmt(q.options[r]||'')}`:fmt(r)}
+function explainHTML(q){
+ const steps=String(q.exam_solution||'').split(/\s*->\s*/).filter(Boolean);
+ return `<div class="box ans"><b class="t">Answer</b>${answerText(q)}</div>
+ <div class="box baby"><b class="t">Simple explanation</b>${fmt(q.baby_explanation)}</div>
+ <div class="box sol"><b class="t">Exam solution</b>${solHTML(steps)}</div>
+ ${q.common_mistake?`<div class="box mis"><b class="t">Common mistake</b>${fmt(q.common_mistake)}</div>`:''}
+ ${q.notes_flag?`<div class="box flag"><b class="t">Note on your notes</b>${fmt(q.notes_flag)}</div>`:''}`}
+function solHTML(steps){
+ const L=['Definition','Formula','Substitution','Units'];let items=[];
+ steps.forEach(t=>{if(L.includes(t.trim()))items.push({l:t.trim(),c:[]});else if(/^Final answer/i.test(t.trim()))items.push({l:'Final answer',c:[t.trim().replace(/^Final answer:?\s*/i,'')]});else{if(!items.length)items.push({l:'',c:[]});items[items.length-1].c.push(t)}});
+ items=items.filter(x=>x.c.length&&!x.c.every(c=>/^\s*(n\/?a|none|-|—)\.?\s*$/i.test(c)));
+ return items.map(x=>`<div style="margin:6px 0"><b style="color:var(--blue)">${x.l}</b><br>${x.c.map(fmt).join('<br>')}</div>`).join('')}
+function feedback(){
+ const q=deck[i],a=ans[i];
+ if(isPick(q))document.querySelectorAll('.opt').forEach(b=>{if(b.dataset.k===q.answer)b.classList.add('ok');else if(b.dataset.k===a.resp)b.classList.add('bad')});
+ else{const t=$('#typed');if(t)t.disabled=true}
+ $('#sub').classList.add('hide');$('#skip').classList.add('hide');
+ const canOverride=!isPick(q)&&!a.ok&&!a.skipped;
+ const dg=a.diag,close=dg&&dg.status==='close'&&!a.ok;
+ $('#fb').innerHTML=`<div class="res ${a.ok?'g':(close?'o':'r')}">${a.ok?'Correct':(a.skipped?'Skipped':(close?'Close':'Not quite'))}</div>`+
+  diagBox(a)+
+  (!isPick(q)&&a.resp?`<div class="box you"><b class="t">Your answer</b>${fmt(a.resp)}</div>`:'')+
+  (canOverride?`<div class="muted">If your answer means the same thing as the notes' answer:</div><div class="row"><button id="ovr">Count mine as correct</button></div>`:'')+
+  explainHTML(q);
+ if(canOverride)$('#ovr').onclick=()=>{a.ok=true;a.over=true;record(i,true);feedback()};
+ const b=document.createElement('button');b.className='p';b.textContent=i+1<deck.length?'Next':'Finish';
+ b.onclick=()=>{i++;show();window.scrollTo(0,0)};$('#fb').appendChild(b);
+}
+function finish(){
+ const ok=ans.filter(a=>a&&a.ok).length,n=deck.length;
+ $('#app').innerHTML=`<h1>Done</h1><div class="card"><div class="res g">${ok} correct</div><div class="res r">${n-ok} to review</div><div class="muted">${Math.round(ok/n*100)}% this round</div></div>
+ <div class="row"><button id="all">Review all</button><button id="wr">Review wrong only</button></div>
+ <div id="rv"></div><button class="p" id="h">Back to start</button>`;
+ $('#h').onclick=home;$('#all').onclick=()=>review(false);$('#wr').onclick=()=>review(true);
+ review(mode=='end'?false:true);
+}
+function review(onlyWrong){
+ const out=deck.map((q,k)=>({q,a:ans[k]||{resp:'',ok:false,skipped:true},k})).filter(x=>!onlyWrong||!x.a.ok);
+ $('#rv').innerHTML=out.length?out.map(x=>`<details class="rv"><summary><span class="dot ${x.a.ok?'g':'r'}"></span>${x.k+1}. ${fmt(x.q.question)}</summary>
+  <div class="box you"><b class="t">Your answer</b>${respText(x.q,x.a.resp)}</div>
+  ${diagBox(x.a)}
+  ${!x.a.ok&&!isPick(x.q)&&!x.a.skipped?`<div class="row"><button data-o="${x.k}">Count mine as correct</button></div>`:''}
+  ${explainHTML(x.q)}</details>`).join(''):'<div class="card muted">Nothing wrong here. Well done.</div>';
+ document.querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>{const k=+b.dataset.o;ans[k].ok=true;record(k,true);finish()});
+}
+function stats(){
+ const rows=secs.map(s=>{const qs=Q.filter(q=>q.section==s),a=qs.filter(q=>q.id in S.res).length,r=qs.filter(q=>S.res[q.id]).length;
+  return `<div class="stat"><span>${esc(s)}</span><span class="muted">${r}/${qs.length} correct · ${a} tried</span></div>`}).join('');
+ $('#app').innerHTML=`<h1>Progress by topic</h1><div class="card">${rows}</div><button class="p" id="h">Back</button>`;$('#h').onclick=home;
+}
+load();
+</script></body></html>
