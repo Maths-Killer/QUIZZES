@@ -288,4 +288,5 @@ function stats(){
  $('#app').innerHTML=`<h1>Progress by topic</h1><div class="card">${rows}</div><button class="p" id="h">Back</button>`;$('#h').onclick=home;
 }
 load();
+if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{})})}
 </script></body></html>
